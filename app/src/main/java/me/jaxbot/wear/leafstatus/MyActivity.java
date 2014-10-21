@@ -2,6 +2,7 @@ package me.jaxbot.wear.leafstatus;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -32,6 +33,11 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.getpebble.android.kit.PebbleKit;
+import com.getpebble.android.kit.util.PebbleDictionary;
+
+import me.jaxbot.wear.leafstatus.async.StartACTask;
+
 public class MyActivity extends ActionBarActivity {
     String DISCLAIMER = "A project by Jonathan Warner (@Jaxbot). Not affiliated with or supported by Nissan.";
 
@@ -50,7 +56,7 @@ public class MyActivity extends ActionBarActivity {
 
         setContentView(R.layout.activity_my);
 
-
+        createPebbleListener();
 
         SurfaceView view = (SurfaceView) findViewById(R.id.surfaceView2);
 
@@ -157,6 +163,25 @@ public class MyActivity extends ActionBarActivity {
             updateCarStatusUI(carwings);
             LeafNotification.sendNotification(context, carwings);
         }
+    }
+
+    private void createPebbleListener() {
+        if (!PebbleKit.isWatchConnected(getApplicationContext())) {
+            //No need to create a listener. There is no pebble.
+            return;
+        }
+
+        PebbleKit.registerReceivedDataHandler(this, new PebbleKit.PebbleDataReceiver(AppConstants.PEBBLE_APP_UUID) {
+            @Override
+            public void receiveData(final Context context, final int transactionId, final PebbleDictionary data) {
+                PebbleKit.sendAckToPebble(getApplicationContext(), transactionId);
+                new StartACTask(context, determineHVACState(data)).execute(null, null, null);
+            }
+
+            private boolean determineHVACState(PebbleDictionary data) {
+                return data.getInteger(AppConstants.PEBBLE_HVAC_STATE_INDEX) == 1;
+            }
+        });
     }
 
     void updateCarStatusAsync()

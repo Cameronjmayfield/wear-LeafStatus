@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.os.AsyncTask;
 import android.util.Log;
 
+import me.jaxbot.wear.leafstatus.async.StartACTask;
+
 /**
  * Created by jonathan on 9/21/14.
  */
@@ -20,24 +22,6 @@ public class StartAC extends BroadcastReceiver {
 
         Log.i(TAG, "Desired: " + String.valueOf(state));
 
-        new AsyncTask<Void, Void, Void>() {
-            @Override
-            protected Void doInBackground(Void... params) {
-                Carwings carwings = new Carwings(context);
-
-                carwings.currentHvac = state;
-                LeafNotification.sendNotification(context, carwings, false);
-
-                if (carwings.startAC(state)) {
-                    Log.i(TAG, "AC started.");
-                } else {
-                    Log.i(TAG, "StartAC failed, likely due to login.");
-                }
-
-                LeafNotification.sendNotification(context, carwings);
-                return null;
-            }
-        }.execute(null, null, null);
-
+        new StartACTask(context, state).execute(null, null, null);
     }
 }
