@@ -2,32 +2,23 @@ package me.jaxbot.wear.leafstatus;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.os.AsyncTask;
-import android.os.Message;
-import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
-import android.view.KeyEvent;
+import android.support.v7.app.ActionBarActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
-import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -37,6 +28,7 @@ import com.getpebble.android.kit.PebbleKit;
 import com.getpebble.android.kit.util.PebbleDictionary;
 
 import me.jaxbot.wear.leafstatus.async.StartACTask;
+import me.jaxbot.wear.leafstatus.pebble.PebbleCarwings;
 
 public class MyActivity extends ActionBarActivity {
     String DISCLAIMER = "A project by Jonathan Warner (@Jaxbot). Not affiliated with or supported by Nissan.";
@@ -175,7 +167,15 @@ public class MyActivity extends ActionBarActivity {
             @Override
             public void receiveData(final Context context, final int transactionId, final PebbleDictionary data) {
                 PebbleKit.sendAckToPebble(getApplicationContext(), transactionId);
-                new StartACTask(context, determineHVACState(data)).execute(null, null, null);
+                if(isHVACRequest(data)){
+                    new StartACTask(context, determineHVACState(data)).execute(null, null, null);
+                } else {
+                    updateCarStatusAsync();
+                }
+            }
+
+            private boolean isHVACRequest(PebbleDictionary data) {
+                return data.contains(AppConstants.PEBBLE_HVAC_STATE_INDEX);
             }
 
             private boolean determineHVACState(PebbleDictionary data) {
@@ -196,17 +196,41 @@ public class MyActivity extends ActionBarActivity {
             protected Void doInBackground(Void... params) {
                 final Carwings carwings = new Carwings(context);
 
-                carwings.update();
+//                carwings.update();
                 LeafNotification.sendNotification(context, carwings);
 
                 activity.runOnUiThread(new Runnable() {
                     public void run() {
                         updateCarStatusUI(carwings);
+                        updatePebble(carwings);
                     }
                 });
                 return null;
             }
         }.execute(null, null, null);
+    }
+
+    private void updatePebble(Carwings carwings) {
+        if (!PebbleKit.isWatchConnected(getApplicationContext())) {
+            //No need to update pebble. There is no pebble.
+            return;
+        }
+        PebbleDictionary dictionary = PebbleCarwings.getDictionary(carwings);
+        PebbleKit.registerReceivedAckHandler(getApplicationContext(), new PebbleKit.PebbleAckReceiver(AppConstants.PEBBLE_APP_UUID) {
+            @Override
+            public void receiveAck(Context context, int transactionId) {
+                Log.i(getLocalClassName(), "Received ack for transaction " + transactionId);
+            }
+        });
+
+        PebbleKit.registerReceivedNackHandler(getApplicationContext(), new PebbleKit.PebbleNackReceiver(AppConstants.PEBBLE_APP_UUID) {
+            @Override
+            public void receiveNack(Context context, int transactionId) {
+                Log.i(getLocalClassName(), "Received nack for transaction " + transactionId);
+            }
+        });
+        PebbleKit.sendDataToPebble(this, AppConstants.PEBBLE_APP_UUID, dictionary);
+
     }
 
     void updateCarStatusUI(Carwings carwings)
